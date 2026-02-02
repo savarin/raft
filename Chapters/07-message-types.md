@@ -181,7 +181,7 @@ class RequestVoteResponse(Message):
 
 ## 7.6 Message Encoding and Decoding
 
-Messages must be serialized for network transmission. The `encode_message` function converts a message to a Bencode string:
+Messages must be serialized for network transmission. Building on the Bencode primitives from Chapter 4, the `encode_message` function converts a message to a Bencode string:
 
 ```python
 def encode_message(message: Message) -> str:

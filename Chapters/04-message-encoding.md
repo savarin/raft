@@ -176,59 +176,24 @@ def test_decode_items():
 
 These tests cover edge cases: empty values, negative numbers, nested structures. The symmetry between encode and decode tests makes it easy to verify correctness.
 
-## 4.6 Message Serialization
+## 4.6 From Bencode to Messages
 
-The `raftmessage.py` module builds on Bencode to serialize typed messages:
+With `encode_item` and `decode_item` handling primitive types, the next layer up handles Raft-specific messages. Chapter 7 covers this in detail, but the key insight is that Raft messages are just dictionaries with a `message_type` field for dispatch:
 
 ```python
+# A simplified view of message encoding
 def encode_message(message: Message) -> str:
     attributes = vars(message).copy()
-
-    match message:
-        case AppendEntryRequest():
-            entries = []
-            for entry in message.entries:
-                entries.append(vars(entry))
-            attributes["message_type"] = MessageType.APPEND_REQUEST.value
-            attributes["entries"] = entries
-
-        case AppendEntryResponse():
-            attributes["message_type"] = MessageType.APPEND_RESPONSE.value
-            attributes["success"] = int(attributes["success"])
-
-        # ... other cases
-
+    attributes["message_type"] = get_message_type(message)
     return rafthelpers.encode_item(attributes)
 ```
 
-Each message type needs special handling:
-- A `message_type` field is added for dispatch on the receiving end
-- Nested objects (like `LogEntry` lists) are converted to dicts
-- Booleans are converted to integers (Bencode doesn't have booleans)
-- Enum values are converted to strings
+The Bencode layer doesn't know about Raft—it just sees dictionaries, lists, strings, and integers. The message layer adds meaning by:
+- Adding `message_type` for dispatch on decode
+- Converting booleans to integers (Bencode has no boolean type)
+- Converting nested objects (like `LogEntry`) to dictionaries
 
-The decoder reverses these transformations:
-
-```python
-def decode_message(string: str) -> Message:
-    attributes = rafthelpers.decode_item(string)
-    message_type = MessageType(attributes["message_type"])
-    del attributes["message_type"]
-
-    match message_type:
-        case MessageType.APPEND_REQUEST:
-            entries = []
-            for entry in attributes["entries"]:
-                entries.append(raftlog.LogEntry(**entry))
-            attributes["entries"] = entries
-            return AppendEntryRequest(**attributes)
-
-        case MessageType.APPEND_RESPONSE:
-            attributes["success"] = bool(attributes["success"])
-            return AppendEntryResponse(**attributes)
-
-        # ... other cases
-```
+See Chapter 7 for the complete message encoding implementation.
 
 ## Conclusion
 
