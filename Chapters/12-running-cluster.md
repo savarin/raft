@@ -57,7 +57,7 @@ When servers start, you'll see election unfold:
 
 2. **Timeout**: After the election timeout (2 seconds), one server times out. Due to randomized delays, one usually wins the race
 
-3. **Candidate phase**: The first server to timeout becomes a candidate (yellow prompt), increments its term, and sends `RequestVoteRequest` to others
+3. **Candidate phase**: The first server to time out becomes a candidate (yellow prompt), increments its term, and sends `RequestVoteRequest` to others
 
 4. **Voting**: Other servers receive the vote request and grant their vote (they haven't voted yet this term)
 

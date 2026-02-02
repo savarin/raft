@@ -156,7 +156,7 @@ def timeout(self) -> None:
 
 If three followers all have their timers expire simultaneously, this random delay staggers them. The first one to wake up starts an election and (usually) wins before others start.
 
-Without this randomization, split votes could repeat indefinitely: all candidates request votes at the same time, each gets some votes, none gets majority, all timeout, repeat.
+Without this randomization, split votes could repeat indefinitely: all candidates request votes at the same time, each gets some votes, none gets majority, all time out, repeat.
 
 ## 11.7 Leader Step-Down
 
