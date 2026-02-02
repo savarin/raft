@@ -118,7 +118,7 @@ for n, entry in enumerate(entries, start=previous_index + 1):
 
 For each entry we're about to append, check if there's an existing entry at that index with a different term. If so, delete that entry and everything after it. The later term (the one we're appending) takes precedence.
 
-**Step 4: Check for duplicate entries**
+**Step 4: Validate existing entries**
 
 ```python
 for i, entry in enumerate(entries):
@@ -126,7 +126,7 @@ for i, entry in enumerate(entries):
         return False
 ```
 
-This verifies we're not creating inconsistent duplicates. The `is_equal_entry` helper checks if the entry at the given position either doesn't exist (fine—we'll append it) or matches what we're appending (also fine—idempotent).
+This validates that any entries already in the log at these positions match what we're appending. The `is_equal_entry` helper returns True if the position is beyond the log's current length (fine—we'll append there) or if the existing entry matches. If there's a mismatch that wasn't caught by the conflict resolution in Step 3, something is wrong.
 
 **Step 5: Append new entries**
 

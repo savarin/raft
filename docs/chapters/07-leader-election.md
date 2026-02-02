@@ -184,16 +184,7 @@ Consider: an entry is committed when it's replicated on a majority. For a candid
 
 That overlapping server has the committed entry. It will only vote for a candidate whose log includes that entry (or is more recent). So any winner must have all committed entries.
 
-The comparison prioritizes term over length:
-
-```python
-# Check term first
-elif len(self.log) > 0 and last_log_term < self.log[-1].term:
-    success = False
-# Then check length
-elif last_log_index < len(self.log) - 1:
-    success = False
-```
+The comparison prioritizes term over length. In the code above, the length check (Check 2) appears before the term check (Check 3) due to `elif` chaining, but the logic still enforces the correct priority: a candidate with a higher last-entry term wins regardless of log length, because a shorter log with a higher term will pass the length check but a longer log with a lower term will fail the term check.
 
 A candidate with last entry term 5 beats one with term 4, even if the term-4 candidate has a longer log. Terms are more authoritative than length.
 

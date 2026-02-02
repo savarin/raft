@@ -50,6 +50,30 @@ Leaders:
 
 A leader continues until it discovers a higher term (from any RPC) or fails to communicate with followers. In this implementation, if a leader sends heartbeats but receives no responses, it steps down. This handles the case where a leader is partitioned from the rest of the cluster.
 
+### The State Machine Diagram
+
+The transitions between roles form a simple state machine:
+
+```
+                       timeout
+            +-------------------------+
+            |                         |
+            v                         |
+     +-----------+   timeout    +-----------+
+     | FOLLOWER  |------------->| CANDIDATE |
+     +-----------+              +-----------+
+            ^                         |
+            |   higher term           | majority
+            |   or leader exists      | votes
+            |                         v
+            |                   +-----------+
+            +-------------------|  LEADER   |
+               no responses     +-----------+
+               or higher term
+```
+
+Followers become candidates on timeout. Candidates become leaders on winning. Leaders become followers on losing contact or seeing a higher term. Any role can become follower on seeing a higher term.
+
 ## Terms
 
 Terms are Raft's logical clock. Every message carries a term number. Every server tracks its current term.
@@ -224,30 +248,6 @@ def enumerate_state_change(
 ```
 
 This separation—computing what should change separately from actually changing it—keeps the logic testable. You can call `enumerate_state_change` with any inputs and verify the output without modifying any state.
-
-## The State Machine Diagram
-
-The transitions between roles form a simple state machine:
-
-```
-                    timeout
-         +---------------------------+
-         |                           |
-         v                           |
-    +---------+    timeout      +-----------+
-    | FOLLOWER| --------------> | CANDIDATE |
-    +---------+                 +-----------+
-         ^                           |
-         |    higher term            | majority votes
-         |    or leader exists       |
-         |                           v
-         |                      +---------+
-         +----------------------|  LEADER |
-              no responses      +---------+
-              or higher term
-```
-
-Followers become candidates on timeout. Candidates become leaders on winning. Leaders become followers on losing contact or seeing a higher term. Any role can become follower on seeing a higher term.
 
 ## Why This Design
 
