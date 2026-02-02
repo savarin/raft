@@ -4,13 +4,14 @@
 
 This chapter covers how `RaftServer` combines state, network, and timer into a running Raft node. The server is the integration point: it receives messages from the network, passes them to `RaftState` handlers, sends responses, and manages timeouts that trigger elections and heartbeats.
 
-## Sections
+## 11.1 The RaftServer Class
 
-### 11.1 The RaftServer Class
-
-`RaftServer` composes the pieces:
+`RaftServer` composes the pieces we've seen in previous chapters:
 
 ```python
+TIMEOUT = 1
+
+
 @dataclasses.dataclass
 class RaftServer:
     identifier: int
@@ -22,32 +23,50 @@ class RaftServer:
         self.reset: bool = True
 ```
 
-### 11.2 The Main Loop
+Four components:
+- **`state`**: The `RaftState` from Chapter 6 (log, role, handlers)
+- **`node`**: The `RaftNode` from Chapter 10 (network I/O)
+- **`timer`**: Threading timer for election/heartbeat timeouts
+- **`reset`**: Flag controlling timeout behavior
 
-`respond()` is the event loop:
+## 11.2 The Main Loop
+
+`respond()` is the event loop that processes messages:
 
 ```python
 def respond(self) -> None:
     while True:
         payload = self.node.receive()
         request = raftmessage.decode_message(payload)
+
+        if (self.state.role, type(request)) in [
+            (raftrole.Role.FOLLOWER, raftmessage.AppendEntryRequest),
+            (raftrole.Role.FOLLOWER, raftmessage.RequestVoteRequest),
+            (raftrole.Role.CANDIDATE, raftmessage.RequestVoteResponse),
+        ]:
+            self.reset = False
+
         response = self.state.handle_message(request)
         self.send(response)
+        self.cycle()
 ```
 
-1. Block waiting for a message
-2. Decode the message
-3. Pass to state handler
-4. Send any response messages
+The loop:
+1. Block waiting for a message from the network
+2. Decode the message from Bencode
+3. Update the `reset` flag if this message should suppress timeout
+4. Pass to `handle_message` and get response messages
+5. Send responses
+6. Reset the timer
 
-### 11.3 Timeout Management
+## 11.3 Timeout Management
 
-Timeouts trigger elections (followers) and heartbeats (leaders):
+The timer triggers elections (for followers) and heartbeats (for leaders):
 
 ```python
 def timeout(self) -> None:
     if self.state.role == raftrole.Role.FOLLOWER:
-        time.sleep(random.random() * TIMEOUT)  # Randomize
+        time.sleep(random.random() * TIMEOUT)
 
     if self.reset:
         message = raftstate.change_state_on_timeout(self.state)
@@ -56,9 +75,18 @@ def timeout(self) -> None:
     self.cycle()
 ```
 
-The timeout handler puts a message in the incoming queue, letting it flow through the normal handler path.
+Key design: the timeout handler doesn't call `handle_message` directly. Instead, it puts a message in the incoming queue:
 
-### 11.4 The Reset Flag
+```python
+self.node.incoming.put(raftmessage.encode_message(message))
+```
+
+This ensures all state changes flow through the same code path—the main loop's `handle_message` call. Benefits:
+- Consistent logging and debugging
+- No race conditions between timeout and network messages
+- Testable: timeouts are just messages
+
+## 11.4 The Reset Flag
 
 The `reset` flag prevents spurious timeouts:
 
@@ -71,14 +99,39 @@ if (self.state.role, type(request)) in [
     self.reset = False
 ```
 
-If a follower receives a heartbeat or vote request, don't trigger election on next timeout. The flag resets at the start of each timer cycle.
+When a follower receives:
+- An `AppendEntryRequest` (heartbeat from leader)
+- A `RequestVoteRequest` (candidate seeking votes)
 
-### 11.5 Role-Based Timeout Duration
+...it sets `reset = False`. When the timer fires, if `reset` is `False`, no timeout message is injected:
 
-Leaders use shorter timeouts (heartbeat interval), followers use longer timeouts (election timeout):
+```python
+def timeout(self) -> None:
+    # ...
+    if self.reset:
+        message = raftstate.change_state_on_timeout(self.state)
+        self.node.incoming.put(...)
+
+    self.cycle()  # Reset timer for next cycle
+```
+
+This prevents a follower from starting an election immediately after receiving a valid heartbeat.
+
+The `cycle()` method resets the flag for the next interval:
 
 ```python
 def cycle(self) -> None:
+    self.reset = True  # Reset for next cycle
+    # ... restart timer ...
+```
+
+## 11.5 Role-Based Timeout Duration
+
+Leaders and followers use different timeout durations:
+
+```python
+def cycle(self) -> None:
+    self.reset = True
     timeout = TIMEOUT if self.state.role == raftrole.Role.LEADER else 2 * TIMEOUT
 
     self.timer.cancel()
@@ -86,30 +139,77 @@ def cycle(self) -> None:
     self.timer.start()
 ```
 
-### 11.6 Randomized Election Timeout
+- **Leader**: `TIMEOUT` (1 second) — sends heartbeats frequently
+- **Follower/Candidate**: `2 * TIMEOUT` (2 seconds) — gives time for heartbeats to arrive
 
-The random sleep before follower elections prevents split votes:
+The leader's shorter timeout ensures heartbeats are sent before followers time out.
 
-```python
-if self.state.role == raftrole.Role.FOLLOWER:
-    time.sleep(random.random() * TIMEOUT)
-```
+## 11.6 Randomized Election Timeout
 
-Different followers wake up at different times, so one usually wins before others start.
-
-### 11.7 Leader Step-Down
-
-If a leader receives no `AppendEntryResponse` between heartbeats, it may be partitioned. The `has_followers` flag tracks this:
+To prevent split votes, followers add random delay before starting elections:
 
 ```python
-# In change_state_on_timeout:
-if not state.has_followers:
-    return raftmessage.RoleChange(..., LEADER, FOLLOWER)
-
-state.has_followers = False  # Reset for next cycle
+def timeout(self) -> None:
+    if self.state.role == raftrole.Role.FOLLOWER:
+        time.sleep(random.random() * TIMEOUT)
 ```
 
-### 11.8 Starting the Server
+If three followers all have their timers expire simultaneously, this random delay staggers them. The first one to wake up starts an election and (usually) wins before others start.
+
+Without this randomization, split votes could repeat indefinitely: all candidates request votes at the same time, each gets some votes, none gets majority, all timeout, repeat.
+
+## 11.7 Leader Step-Down
+
+A leader must step down if it becomes isolated (no followers responding):
+
+```python
+def change_state_on_timeout(state: RaftState) -> raftmessage.Message:
+    match state.role:
+        case raftrole.Role.LEADER:
+            assert state.has_followers is not None
+
+            if not state.has_followers:
+                return raftmessage.RoleChange(
+                    state.identifier,
+                    state.identifier,
+                    raftrole.Role.LEADER,
+                    raftrole.Role.FOLLOWER,
+                )
+
+            state.has_followers = False
+
+            return raftmessage.UpdateFollowers(
+                state.identifier,
+                state.identifier,
+                state.create_followers_list(),
+            )
+```
+
+The logic:
+1. If `has_followers` is `False`, no responses since last heartbeat → step down
+2. Otherwise, reset `has_followers` to `False` and send new heartbeat
+3. If responses arrive before next timeout, `has_followers` becomes `True`
+
+This prevents a partitioned leader from accepting writes that can't be replicated.
+
+## 11.8 Sending Responses
+
+The `send` method handles response messages:
+
+```python
+def send(self, response: List[raftmessage.Message]) -> None:
+    for message in response:
+        if message.target == self.identifier:
+            self.node.incoming.put(raftmessage.encode_message(message))
+        else:
+            self.node.send(message.target, raftmessage.encode_message(message))
+```
+
+Two cases:
+- **Self-targeted messages**: Go back to the incoming queue (internal events like `UpdateFollowers` after becoming leader)
+- **External messages**: Sent over the network via `RaftNode`
+
+## 11.9 Starting the Server
 
 `run()` starts all components:
 
@@ -117,30 +217,42 @@ state.has_followers = False  # Reset for next cycle
 def run(self):
     self.node.start()   # Start network threads
     self.timer.start()  # Start timeout timer
-    self.respond()      # Enter main loop
+    self.respond()      # Enter main loop (blocks forever)
 ```
+
+The main script:
+
+```python
+if __name__ == "__main__":
+    identifier = int(sys.argv[1])
+    raftServer = RaftServer(identifier)
+    raftServer.run()
+```
+
+## 11.10 The Prompt
+
+The server displays a colored prompt indicating its role:
+
+```python
+RED = "\033[1;31m"    # Follower
+YELLOW = "\033[1;33m" # Candidate
+GREEN = "\033[1;32m"  # Leader
+DEFAULT = "\033[0m"
+
+def prompt(state: raftstate.RaftState):
+    match state.role:
+        case raftrole.Role.FOLLOWER:
+            color = RED
+        case raftrole.Role.CANDIDATE:
+            color = YELLOW
+        case raftrole.Role.LEADER:
+            color = GREEN
+
+    print(f"{color}{str(state.identifier)} {str(state.role.value)}{DEFAULT} > ", end="")
+```
+
+This visual feedback helps when observing the cluster.
 
 ## Conclusion
 
-`RaftServer` integrates state, network, and timer into a running node. The main loop receives messages, dispatches to handlers, and sends responses. Timeouts trigger elections and heartbeats by injecting messages into the incoming queue. The reset flag and role-based timeout durations coordinate the timing behavior.
-
----
-
-## Cross-Chapter Coordination
-
-**Concepts introduced here**:
-- `RaftServer` class composition
-- Main event loop (`respond`)
-- Timeout handling and injection into message queue
-- Reset flag for timeout suppression
-- Role-based timeout durations
-- Randomized election timeout
-- Leader step-down on isolation (`has_followers`)
-
-**Back-references**:
-- Chapter 6 introduced `has_followers` state attribute
-- Chapter 8 mentioned randomized timeout for split vote prevention
-- Chapter 10 introduced `RaftNode` used here
-
-**Forward dependencies**:
-- Chapter 12 shows how to run servers and interact with them
+`RaftServer` integrates state, network, and timer into a running node. The main loop receives messages, dispatches to handlers, and sends responses. Timeouts trigger elections and heartbeats by injecting messages into the incoming queue, ensuring all state changes flow through `handle_message`. The reset flag prevents spurious elections after heartbeats. Role-based timeout durations ensure heartbeats are sent before followers time out. Randomized election delays prevent split votes. Leader isolation detection forces step-down when partitioned.
