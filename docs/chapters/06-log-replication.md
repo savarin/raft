@@ -232,7 +232,7 @@ The solution: **only commit through current-term entries**. When a leader commit
 The tests in `test_raftstate.py` reproduce Figure 7 from the Raft paper—various ways follower logs can diverge:
 
 ```
-Leader (term 6): [1,1,1,4,4,5,5,6,6,6]
+Leader (term 6):            [1,1,1,4,4,5,5,6,6,6]
 
 (a) Missing last entry:     [1,1,1,4,4,5,5,6,6]
 (b) Missing last 6 entries: [1,1,1,4]

@@ -55,21 +55,21 @@ A leader continues until it discovers a higher term (from any RPC) or fails to c
 The transitions between roles form a simple state machine:
 
 ```
-                    timeout
-         +---------------------------+
-         |                           |
-         v                           |
-    +---------+    timeout      +-----------+
-    | FOLLOWER| --------------> | CANDIDATE |
-    +---------+                 +-----------+
-         ^                           |
-         |    higher term            | majority votes
-         |    or leader exists       |
-         |                           v
-         |                      +---------+
-         +----------------------|  LEADER |
-              no responses      +---------+
-              or higher term
+                       timeout
+            +-------------------------+
+            |                         |
+            v                         |
+     +-----------+   timeout    +-----------+
+     | FOLLOWER  |------------->| CANDIDATE |
+     +-----------+              +-----------+
+            ^                         |
+            |   higher term           | majority
+            |   or leader exists      | votes
+            |                         v
+            |                   +-----------+
+            +-------------------|  LEADER   |
+               no responses     +-----------+
+               or higher term
 ```
 
 Followers become candidates on timeout. Candidates become leaders on winning. Leaders become followers on losing contact or seeing a higher term. Any role can become follower on seeing a higher term.
