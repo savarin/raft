@@ -52,13 +52,13 @@ class ElectionScene(Scene):
 
         self.play(Create(clock_group), run_time=1)
         self.play(Rotate(clock_hand, angle=-PI, about_point=clock.get_center()), run_time=2)
-        self.wait(3)
+        self.wait(2)
 
         # Shot 4.2 [6s]: Timeout triggers
         timeout_flash = Flash(clock.get_center(), color=CANDIDATE_COLOR, line_length=0.2)
         self.play(timeout_flash, run_time=0.5)
         self.play(s1[0].animate.set_color(CANDIDATE_COLOR), run_time=0.5)
-        self.wait(5)
+        self.wait(4)
 
         # Shot 4.3 [6s]: S1 becomes Candidate, term increments
         new_label1 = Text("Candidate", font_size=20, color=CANDIDATE_COLOR).next_to(
