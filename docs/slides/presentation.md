@@ -376,7 +376,7 @@ After:    Follower becomes Leader
 Once committed, an entry will be in every future leader's log.
 
 <!--
-This is the payoff. Committed entries are durable. Even if the leader dies, the election mechanism ensures only candidates with those entries can win. Safety and liveness from the same mechanism—terms.
+This is the payoff. Committed entries are durable. Even if the leader dies, the election mechanism ensures only candidates with those entries can win. Safety and liveness from the same mechanism—term numbers enforcing leader authority.
 -->
 
 ---
