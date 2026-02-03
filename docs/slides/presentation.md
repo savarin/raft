@@ -396,14 +396,14 @@ Raft handles more: adding/removing servers, compacting the log, linearizable rea
 
 ---
 
-# This implementation: ~600 lines of core logic
+# This implementation: ~1,200 lines of core logic
 
 | File | Purpose | Lines |
 |------|---------|-------|
-| `raftlog.py` | Log operations | 75 |
-| `raftrole.py` | Role transitions | 270 |
-| `raftstate.py` | State machine | 650 |
-| `raftmessage.py` | Message types | 220 |
+| `raftlog.py` | Log operations | 74 |
+| `raftrole.py` | Role transitions | 271 |
+| `raftstate.py` | State machine | 648 |
+| `raftmessage.py` | Message types | 218 |
 
 Separation of concerns: state machine logic is testable in isolation.
 
