@@ -4,8 +4,11 @@
 from manim import *
 
 # Color palette
+LEADER_COLOR = "#3498db"
+FOLLOWER_COLOR = "#95a5a6"
+CANDIDATE_COLOR = "#f1c40f"
+COMMITTED_COLOR = "#2ecc71"
 BG_COLOR = "#1a1a2e"
-ACCENT_COLOR = "#3498db"
 
 
 class RulesScene(Scene):
@@ -30,9 +33,9 @@ class RulesScene(Scene):
 
         # Highlight all rules
         self.play(
-            rule1.animate.set_color(ACCENT_COLOR),
-            rule2.animate.set_color(ACCENT_COLOR),
-            rule3.animate.set_color(ACCENT_COLOR),
+            rule1.animate.set_color(LEADER_COLOR),
+            rule2.animate.set_color(LEADER_COLOR),
+            rule3.animate.set_color(LEADER_COLOR),
             run_time=1,
         )
         self.wait(2)
