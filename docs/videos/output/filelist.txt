@@ -1,0 +1,7 @@
+docs/videos/renders/videos/scene_01_hook/1080p60/HookScene.mp4
+docs/videos/renders/videos/scene_02_rules/1080p60/RulesScene.mp4
+docs/videos/renders/videos/scene_03_roles/1080p60/RolesScene.mp4
+docs/videos/renders/videos/scene_04_election/1080p60/ElectionScene.mp4
+docs/videos/renders/videos/scene_05_replication/1080p60/ReplicationScene.mp4
+docs/videos/renders/videos/scene_06_commit/1080p60/CommitScene.mp4
+docs/videos/renders/videos/scene_07_recap/1080p60/RecapScene.mp4
