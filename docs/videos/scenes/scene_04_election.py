@@ -141,7 +141,7 @@ class ElectionScene(Scene):
         new_label1_leader = Text("Leader", font_size=20, color=LEADER_COLOR).next_to(
             s1, DOWN, buff=0.15
         )
-        crown = Text("👑", font_size=24).next_to(s1, UP, buff=0.1)
+        crown = Text("👑", font_size=28).next_to(s1, UP, buff=0.1)
 
         self.play(
             s1[0].animate.set_color(LEADER_COLOR),
